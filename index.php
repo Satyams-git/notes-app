@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>DevOps Batch 17 Notes App</title>
+    <title>DevOps Batch 20 Notes App</title>
     <style>
         body {
             font-family: "Segoe UI", Arial, sans-serif;
@@ -124,7 +124,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>DevOps Batch 17 Notes App with CI/CD Automation </h1>
+        <h1>DevOps Batch 20 Notes App </h1>
         <form action="save.php" method="post">
             <textarea name="note" placeholder="Write your DevOps notes here..."></textarea><br>
             <button type="submit">💾 Save Note</button>
