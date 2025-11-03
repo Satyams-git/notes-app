@@ -2,13 +2,15 @@ pipeline {
     agent { label "dev" }
 
     environment {
-        IMAGE_NAME = "notes-app"
+        IMAGE_NAME = "notes-app:latest"
         CONTAINER_NAME = "notes-app-container"
-        PORT = "9093"
-        HOST_IP = "http://43.204.35.68/"
+        PORT = "9092"
+        HOST = "13.235.73.101"
+        DOCKER_USER = "satyamsri"
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'master', url: 'https://github.com/Satyams-git/notes-app.git'
@@ -23,68 +25,73 @@ pipeline {
                 '''
             }
         }
-
         stage('Push to Docker Hub') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'Docker_Hub_Id_Pwd',
                     usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                    echo "==== Logging in to Docker Hub ===="
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-
-                    echo "==== Tagging Image ===="
-                    docker tag $IMAGE_NAME $DOCKER_USER/$IMAGE_NAME:latest
-
-                    echo "==== Pushing Image to Docker Hub ===="
-                    docker push $DOCKER_USER/$IMAGE_NAME:latest
-                    '''
+                    passwordVariable: 'DOCKER_PASS',
+                    )]) {
+                        sh'''
+                        echo "======Logging in to Docker HUB======"
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        
+                        echo "=====Tagging Image====="
+                        docker tag $IMAGE_NAME $DOCKER_USER/$IMAGE_NAME
+                        
+                        echo "======Pushing Image to docker Hub===="
+                        docker push $DOCKER_USER/$IMAGE_NAME
+                        '''
                 }
             }
         }
 
-        stage('Deploy Container') {
+        stage('Stop Old Container') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'Docker_Hub_Id_Pwd',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                    echo "==== Stopping old container (if any) ===="
-                    docker stop $CONTAINER_NAME || true
-                    docker rm $CONTAINER_NAME || true
+                sh '''
+                echo "==== Stopping old container (if any) ===="
+                docker stop $CONTAINER_NAME || true
+                docker rm $CONTAINER_NAME || true
+                '''
+            }
+        }
 
-                    echo "==== Pulling latest image from Docker Hub ===="
-                    docker pull $DOCKER_USER/$IMAGE_NAME:latest
+        stage('Run Container') {
+            steps {
+                sh '''
+                echo "==== Running new container ===="
+                docker run -d --name $CONTAINER_NAME -p $PORT:80 -v notes-data:/data $IMAGE_NAME
+                '''
+            }
+        }
 
-                    echo "==== Running new container ===="
-                    docker run -d --name $CONTAINER_NAME -p $PORT:80 $DOCKER_USER/$IMAGE_NAME:latest
-                    '''
-                }
+        stage('Verify') {
+            steps {
+                sh '''
+                echo "==== Checking app response ===="
+                sleep 10
+                curl -s http://$HOST:$PORT | head -n 20
+                '''
             }
         }
     }
 
     post {
         success {
-            echo "App deployed successfully}"
+            echo "Notes App deployed successfully: http://${HOST}:${PORT}"
             emailext(
-                subject:"Build Successdull",
+                subject:"Build Successfull",
                 body:"Congrats! Build was successfull",
                 to:'satyam.hikearts@gmail.com'
-                )
-        
+            )
         }
         failure {
-            echo "Build failed, Check Jenkins logs"
+            echo "Build or deploy failed. Check logs."
             emailext(
                 subject:"Build was failed",
                 body:"Oops! Build Failed",
                 to: "satyam.hikearts@gmail.com"
-                )
+            )
         }
     }
 }
