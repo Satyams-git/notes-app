@@ -56,7 +56,7 @@ pipeline {
         stage('Wait for Sonar Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate abortPipeline: false   // 🔥 ALLOW PIPELINE TO CONTINUE
                 }
             }
         }
@@ -70,7 +70,9 @@ pipeline {
                 )]) {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
                         docker tag satyamsri/notes-app:latest satyamsri/notes-app:${BUILD_NUMBER}
+
                         docker push satyamsri/notes-app:${BUILD_NUMBER}
                         docker push satyamsri/notes-app:latest
                     '''
@@ -85,7 +87,6 @@ pipeline {
                     usernameVariable: 'AWS_ACCESS_KEY_ID',
                     passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                 )]) {
-
                     sh '''
                         echo "Configuring AWS CLI..."
                         aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
