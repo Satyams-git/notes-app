@@ -1,31 +1,3 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: notes-app
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: notes-app
-  template:
-    metadata:
-      labels:
-        app: notes-app
-    spec:
-      containers:
-      - name: notes-app
-        image: satyamsri/notes-app:latest
-        ports:
-        - containerPort: 80
-        volumeMounts:
-        - name: notes-data
-          mountPath: /data
-      volumes:
-      - name: notes-data
-        persistentVolumeClaim:
-          claimName: notes-pvc
-
-ubuntu@ip-172-31-33-3:~/notes-app/k8s$ cat pvc.yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -35,4 +7,4 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 1Gi
