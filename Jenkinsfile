@@ -1,76 +1,119 @@
 pipeline {
-    agent { label "dev" }
+
+    agent any
 
     environment {
-        IMAGE_NAME = "notes-app:latest"
-        CONTAINER_NAME = "notes-app-container"
-        PORT = "9092"
-        HOST = "13.235.73.101"
-        DOCKER_USER = "satyamsri"
+        DOCKER_IMAGE = "satyamsri/notes-app"
+        SONAR_SCANNER = tool 'sonar-scanner'
+        AWS_REGION = "ap-south-1"
+        CLUSTER_NAME = "notes-eks-cluster"
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/Satyams-git/notes-app.git'
+                git branch: 'master',
+                    url: 'https://github.com/Satyams-git/notes-app.git'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                echo "==== Building Docker Image ===="
-                docker build -t $IMAGE_NAME .
-                '''
+                sh """
+                    echo "Building Docker Image..."
+                    docker build -t ${DOCKER_IMAGE}:latest .
+                """
             }
         }
-        stage('Push to Docker Hub') {
+
+        stage('Trivy Scan') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'Docker_Hub_Id_Pwd',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS',
-                    )]) {
-                        sh'''
-                        echo "======Logging in to Docker HUB======"
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        
-                        echo "=====Tagging Image====="
-                        docker tag $IMAGE_NAME $DOCKER_USER/$IMAGE_NAME
-                        
-                        echo "======Pushing Image to docker Hub===="
-                        docker push $DOCKER_USER/$IMAGE_NAME
+                sh """
+                    echo "Running Trivy Vulnerability Scan..."
+                    trivy image --exit-code 0 --severity HIGH,CRITICAL ${DOCKER_IMAGE}:latest
+                """
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                        sh '''
+                            echo "Running SonarScanner..."
+                            ${SONAR_SCANNER}/bin/sonar-scanner \
+                              -Dsonar.projectKey=notes-app \
+                              -Dsonar.sources=. \
+                              -Dsonar.host.url=$SONAR_HOST_URL \
+                              -Dsonar.token=$SONAR_TOKEN
                         '''
+                    }
                 }
             }
         }
 
-        stage('Stop Old Container') {
+        stage('Wait for Sonar Quality Gate') {
             steps {
-                sh '''
-                echo "==== Stopping old container (if any) ===="
-                docker stop $CONTAINER_NAME || true
-                docker rm $CONTAINER_NAME || true
-                '''
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
             }
         }
 
-        stage('Run Container') {
+        stage('Docker Login & Push') {
             steps {
-                sh '''
-                echo "==== Running new container ===="
-                docker run -d --name $CONTAINER_NAME -p $PORT:80 -v notes-data:/data $IMAGE_NAME
-                '''
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker tag satyamsri/notes-app:latest satyamsri/notes-app:${BUILD_NUMBER}
+                        docker push satyamsri/notes-app:${BUILD_NUMBER}
+                        docker push satyamsri/notes-app:latest
+                    '''
+                }
             }
         }
 
-        stage('Verify') {
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'aws-creds',
+                    usernameVariable: 'AWS_ACCESS_KEY_ID',
+                    passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                )]) {
+
+                    sh '''
+                        echo "Configuring AWS CLI..."
+                        aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+                        aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+                        aws configure set default.region ap-south-1
+
+                        echo "Updating kubeconfig..."
+                        aws eks update-kubeconfig --name notes-eks-cluster --region ap-south-1
+
+                        echo "Applying Kubernetes manifests..."
+                        kubectl apply -f k8s/
+
+                        echo "Updating deployment image..."
+                        kubectl set image deployment/notes-app notes-app=satyamsri/notes-app:${BUILD_NUMBER} -n default
+
+                        echo "Waiting for rollout..."
+                        kubectl rollout status deployment/notes-app -n default
+                    '''
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
             steps {
                 sh '''
-                echo "==== Checking app response ===="
-                sleep 10
-                curl -s http://$HOST:$PORT | head -n 20
+                    echo "Verifying Kubernetes Resources..."
+                    kubectl get pods -o wide -n default
+                    kubectl get svc -o wide -n default
                 '''
             }
         }
@@ -78,20 +121,10 @@ pipeline {
 
     post {
         success {
-            echo "Notes App deployed successfully: http://${HOST}:${PORT}"
-            emailext(
-                subject:"Build Successfull",
-                body:"Congrats! Build was successfull",
-                to:'satyam.hikearts@gmail.com'
-            )
+            echo "Pipeline completed successfully"
         }
         failure {
-            echo "Build or deploy failed. Check logs."
-            emailext(
-                subject:"Build was failed",
-                body:"Oops! Build Failed",
-                to: "satyam.hikearts@gmail.com"
-            )
+            echo "Pipeline failed"
         }
     }
 }
