@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>DevOps Batch 20 Notes App</title>
+    <title>Qualibytes - Notes App</title>
     <style>
         body {
             font-family: "Segoe UI", Arial, sans-serif;
@@ -124,9 +124,9 @@
 </head>
 <body>
     <div class="container">
-        <h1>DevOps Batch 20 AUGUST Notes App </h1>
+        <h1>Qualibytes - Notes App</h1>
         <form action="save.php" method="post">
-            <textarea name="note" placeholder="Write your DevOps notes here..."></textarea><br>
+            <textarea name="note" placeholder="Write your notes here..."></textarea><br>
             <button type="submit">💾 Save Note</button>
         </form>
 
@@ -137,14 +137,14 @@
 if (file_exists("/data/notes.txt")) {
     echo file_get_contents("/data/notes.txt");
 } else {
-    echo "No notes yet. Start writing your first DevOps note!";
+    echo "No notes yet. Start writing your first note!";
 }
 ?>
             </pre>
         </div>
 
         <div class="footer">
-            Made with ❤ by <span>DevOps Batch 17</span>
+            Made with ❤ by <span>Qualibytes</span>
         </div>
     </div>
 </body>
