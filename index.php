@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Qualibytes - Notes App</title>
+    <title>Satyam - Notes App</title>
     <style>
         body {
             font-family: "Segoe UI", Arial, sans-serif;
