@@ -2,13 +2,18 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "notes-app:new"
+        DOCKER_USER = credentials('Docker_Hub_Id_Pwd').username
+        DOCKER_PASS = credentials('Docker_Hub_Id_Pwd').password
+
+        IMAGE_NAME = "notes-app"
+        IMAGE_TAG = "v1.${BUILD_NUMBER}"   // auto versioning
         CONTAINER_NAME = "notes-app-container"
         PORT = "9092"
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Code') {
             steps {
                 git branch: 'master', url: 'https://github.com/Satyams-git/notes-app.git'
             }
@@ -18,57 +23,60 @@ pipeline {
             steps {
                 sh '''
                 echo "==== Building Docker Image ===="
-                docker build -t $IMAGE_NAME .
+                docker build -t $IMAGE_NAME:$IMAGE_TAG .
                 '''
             }
         }
 
-        stage('Push to Docker Hub') {
+        stage('Docker Login') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'Docker_Hub_Id_Pwd',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                    echo "==== Logging in to Docker Hub ===="
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-
-                    echo "==== Tagging Image ===="
-                    docker tag $IMAGE_NAME $DOCKER_USER/$IMAGE_NAME:NEW
-
-                    echo "==== Pushing Image to Docker Hub ===="
-                    docker push $DOCKER_USER/$IMAGE_NAME:NEW
-                    '''
-                }
+                sh '''
+                echo "==== Docker Login ===="
+                echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                '''
             }
         }
 
+        stage('Tag & Push Image') {
+            steps {
+                sh '''
+                echo "==== Tagging Image ===="
+                docker tag $IMAGE_NAME:$IMAGE_TAG $DOCKER_USER/$IMAGE_NAME:$IMAGE_TAG
+
+                echo "==== Pushing Image ===="
+                docker push $DOCKER_USER/$IMAGE_NAME:$IMAGE_TAG
+                '''
+            }
+        }
 
         stage('Stop Old Container') {
             steps {
                 sh '''
-                echo "==== Stopping old container (if any) ===="
+                echo "==== Stopping old container ===="
                 docker stop $CONTAINER_NAME || true
                 docker rm $CONTAINER_NAME || true
                 '''
             }
         }
 
-        stage('Run Container') {
+        stage('Run New Container') {
             steps {
                 sh '''
                 echo "==== Running new container ===="
-                docker run -d --name $CONTAINER_NAME -p $PORT:80 -v notes-data:/data $IMAGE_NAME
+                docker run -d \
+                --name $CONTAINER_NAME \
+                -p $PORT:80 \
+                -v notes-data:/data \
+                $DOCKER_USER/$IMAGE_NAME:$IMAGE_TAG
                 '''
             }
         }
 
-        stage('Verify') {
+        stage('Verify Deployment') {
             steps {
                 sh '''
-                echo "==== Checking app response ===="
-                sleep 5
+                echo "==== Verifying App ===="
+                sleep 10
                 curl -s http://15.206.100.42:$PORT | head -n 20
                 '''
             }
@@ -77,10 +85,17 @@ pipeline {
 
     post {
         success {
-            echo "Notes App deployed successfully: http://15.206.100.42:${PORT}"
+            echo "Deployment Successful: http://15.206.100.42:${PORT}"
         }
         failure {
-            echo "Build or deploy failed. Check logs."
+            echo "Deployment Failed! Check logs."
+        }
+
+        always {
+            sh '''
+            echo "==== Cleaning unused images ===="
+            docker image prune -f
+            '''
         }
     }
 }
