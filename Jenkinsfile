@@ -2,13 +2,12 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_USER = credentials('Docker_Hub_Id_Pwd').username
-        DOCKER_PASS = credentials('Docker_Hub_Id_Pwd').password
+        DOCKER_CREDS = credentials('Docker_Hub_Id_Pwd')  // ✅ Correct syntax
 
-        IMAGE_NAME = "notes-app"
-        IMAGE_TAG = "v1.${BUILD_NUMBER}"   // auto versioning
+        IMAGE_NAME     = "notes-app"
+        IMAGE_TAG      = "v1.${BUILD_NUMBER}"
         CONTAINER_NAME = "notes-app-container"
-        PORT = "9092"
+        PORT           = "9092"
     }
 
     stages {
@@ -32,7 +31,7 @@ pipeline {
             steps {
                 sh '''
                 echo "==== Docker Login ===="
-                echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin
                 '''
             }
         }
@@ -41,10 +40,10 @@ pipeline {
             steps {
                 sh '''
                 echo "==== Tagging Image ===="
-                docker tag $IMAGE_NAME:$IMAGE_TAG $DOCKER_USER/$IMAGE_NAME:$IMAGE_TAG
+                docker tag $IMAGE_NAME:$IMAGE_TAG $DOCKER_CREDS_USR/$IMAGE_NAME:$IMAGE_TAG
 
                 echo "==== Pushing Image ===="
-                docker push $DOCKER_USER/$IMAGE_NAME:$IMAGE_TAG
+                docker push $DOCKER_CREDS_USR/$IMAGE_NAME:$IMAGE_TAG
                 '''
             }
         }
@@ -67,7 +66,7 @@ pipeline {
                 --name $CONTAINER_NAME \
                 -p $PORT:80 \
                 -v notes-data:/data \
-                $DOCKER_USER/$IMAGE_NAME:$IMAGE_TAG
+                $DOCKER_CREDS_USR/$IMAGE_NAME:$IMAGE_TAG
                 '''
             }
         }
@@ -90,7 +89,6 @@ pipeline {
         failure {
             echo "Deployment Failed! Check logs."
         }
-
         always {
             sh '''
             echo "==== Cleaning unused images ===="
