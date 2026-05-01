@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "notes-app:latest"
+        IMAGE_NAME = "notes-app:new"
         CONTAINER_NAME = "notes-app-container"
         PORT = "9092"
     }
@@ -22,6 +22,28 @@ pipeline {
                 '''
             }
         }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'Docker_Hub_Id_Pwd',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo "==== Logging in to Docker Hub ===="
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+
+                    echo "==== Tagging Image ===="
+                    docker tag $IMAGE_NAME $DOCKER_USER/$IMAGE_NAME:NEW
+
+                    echo "==== Pushing Image to Docker Hub ===="
+                    docker push $DOCKER_USER/$IMAGE_NAME:NEW
+                    '''
+                }
+            }
+        }
+
 
         stage('Stop Old Container') {
             steps {
