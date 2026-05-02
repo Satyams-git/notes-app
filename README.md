@@ -1,2 +1,1 @@
-This is readme for jenkins
-Test 2 for automation pipeline
+Adding readme to test github webhook
