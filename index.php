@@ -124,7 +124,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>Qualibytes Batch 13 - Notes App</h1>
+        <h1>Qualibytes Batch 12 - Notes App</h1>
         <form action="save.php" method="post">
             <textarea name="note" placeholder="Write your notes here..."></textarea><br>
             <button type="submit">💾 Save Note</button>
