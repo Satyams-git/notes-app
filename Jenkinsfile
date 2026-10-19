@@ -7,8 +7,8 @@ pipeline {
         IMAGE_NAME     = 'notes-app'
         IMAGE_TAG      = "v1.${BUILD_NUMBER}"
         CONTAINER_NAME = 'notes-app-container'
-        PORT           = '9093'
-        HOST_IP        = '18.143.171.229'
+        PORT           = '9092'
+        HOST_IP        = '13.250.117.160'
         EMAIL_TO       = 'satyam.du.ae@gmail.com'
     }
  
