@@ -2,61 +2,46 @@ pipeline {
     agent { label 'dev' }
  
     environment {
-        // Is line se 2 variables bante hain: DOCKER_CREDS_USR, DOCKER_CREDS_PSW
-        DOCKER_CREDS   = credentials('Docker_Hub_Id_Pwd')
+        DOCKER_CREDS   = credentials('Docker_Hub_Id_Pwd')  // _USR, _PSW
  
         IMAGE_NAME     = 'notes-app'
         IMAGE_TAG      = "v1.${BUILD_NUMBER}"
         CONTAINER_NAME = 'notes-app-container'
-        PORT           = '9092'
+        PORT           = '9093'
+        HOST_IP        = '<AGENT_PUBLIC_IP>'
+        EMAIL_TO       = '<YOUR_EMAIL>'
     }
  
     stages {
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
-                git branch: 'master',
-                    url: 'https://github.com/Satyams-git/notes-app.git'
+                checkout scm            // Jenkinsfile wali repo hi checkout hogi
             }
         }
  
         stage('Build Docker Image') {
             steps {
-                sh '''
-                    echo "==== Building Docker Image ===="
-                    docker build -t $IMAGE_NAME:$IMAGE_TAG .
-                '''
+                sh 'docker build -t $IMAGE_NAME:$IMAGE_TAG .'
             }
         }
  
-        stage('Docker Login') {
+        stage('Push to Docker Hub') {
             steps {
                 sh '''
-                    echo "==== Docker Login ===="
                     echo "$DOCKER_CREDS_PSW" | docker login \
                         -u "$DOCKER_CREDS_USR" --password-stdin
-                '''
-            }
-        }
- 
-        stage('Tag & Push Image') {
-            steps {
-                sh '''
-                    echo "==== Tagging Image ===="
                     docker tag $IMAGE_NAME:$IMAGE_TAG \
                         $DOCKER_CREDS_USR/$IMAGE_NAME:$IMAGE_TAG
- 
-                    echo "==== Pushing Image ===="
                     docker push $DOCKER_CREDS_USR/$IMAGE_NAME:$IMAGE_TAG
                 '''
             }
         }
  
-        stage('Deploy Container') {
+        stage('Deploy') {
             steps {
                 sh '''
-                    echo "==== Replacing old container ===="
                     docker stop $CONTAINER_NAME || true
-                    docker rm $CONTAINER_NAME || true
+                    docker rm   $CONTAINER_NAME || true
  
                     docker run -d --name $CONTAINER_NAME \
                         -p $PORT:80 \
@@ -66,10 +51,9 @@ pipeline {
             }
         }
  
-        stage('Verify Deployment') {
+        stage('Verify') {
             steps {
                 sh '''
-                    echo "==== Verifying App ===="
                     sleep 10
                     curl -sf http://localhost:$PORT -o /dev/null
                     echo "App is UP on port $PORT"
@@ -79,8 +63,35 @@ pipeline {
     }
  
     post {
-        success { echo "Deployment Successful - Tag: ${IMAGE_TAG}" }
-        failure { echo 'Deployment Failed! Console Output check karo.' }
+        success {
+            echo "App deployed at: http://${HOST_IP}:${PORT}"
+            emailext(
+                to: "${EMAIL_TO}",
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                mimeType: 'text/plain',
+                body: """Build successful!
+ 
+Job       : ${env.JOB_NAME}
+Build     : #${env.BUILD_NUMBER}
+Image Tag : ${IMAGE_TAG}
+App URL   : http://${HOST_IP}:${PORT}
+Logs      : ${env.BUILD_URL}console
+"""
+            )
+        }
+        failure {
+            emailext(
+                to: "${EMAIL_TO}",
+                subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                mimeType: 'text/plain',
+                body: """Build failed!
+ 
+Job   : ${env.JOB_NAME}
+Build : #${env.BUILD_NUMBER}
+Logs  : ${env.BUILD_URL}console
+"""
+            )
+        }
         always {
             sh 'docker logout || true'
             sh 'docker image prune -f'
